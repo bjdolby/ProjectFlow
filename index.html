@@ -94,6 +94,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--fon
 .view-tabs-slider{position:absolute;top:3px;bottom:3px;border-radius:7px;background:var(--bg2);box-shadow:0 1px 6px rgba(0,0,0,0.25);transition:left 0.2s cubic-bezier(0.4,0,0.2,1),width 0.2s cubic-bezier(0.4,0,0.2,1);z-index:0;pointer-events:none}
 .breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;overflow:hidden}
 .breadcrumb-sep{color:var(--text3);font-size:12px}
+.breadcrumb-link{color:var(--accent);font-size:12px;cursor:pointer;transition:opacity 0.15s}
+.breadcrumb-link:hover{opacity:0.75;text-decoration:underline}
 
 /* ── CONTENT ── */
 #content{flex:1;overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
@@ -960,7 +962,7 @@ const App={
     if(v==='dashboard') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Dashboard</div>`;
     else if(v==='projects'){left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">All Projects</div>`;actions=`<button class="btn btn-primary" onclick="App.newProject()"><i class="ti ti-plus"></i>New Project</button>`;}
     else if(v==='kanban'&&p){
-      left=`<div class="breadcrumb"><span style="color:var(--text3);font-size:12px">Projects</span><i class="ti ti-chevron-right breadcrumb-sep"></i><span>${p.emoji}</span><span style="font-family:var(--font-display);font-weight:700;font-size:16px">${p.name}</span></div>`;
+      left=`<div class="breadcrumb"><span style="color:var(--accent);font-size:12px;cursor:pointer;text-decoration:none" onclick="App.nav('projects')">Projects</span><i class="ti ti-chevron-right breadcrumb-sep"></i><span>${p.emoji}</span><span style="font-family:var(--font-display);font-weight:700;font-size:16px">${p.name}</span></div>`;
       actions=`<div class="view-tabs" id="view-tabs"><div class="view-tabs-slider" id="view-tabs-slider"></div><div class="view-tab ${S.kanbanView==='board'?'active':''}" id="vt-board" onclick="App.setKV('board')"><i class="ti ti-layout-columns"></i>Board</div><div class="view-tab ${S.kanbanView==='list'?'active':''}" id="vt-list" onclick="App.setKV('list')"><i class="ti ti-list"></i>List</div></div><button class="btn" onclick="App.editProject('${p.id}')"><i class="ti ti-pencil"></i>Edit</button><button class="btn" onclick="App.deleteProject('${p.id}')" style="color:var(--red);border-color:var(--red)"><i class="ti ti-trash"></i></button><button class="btn btn-primary" onclick="App.addTask()"><i class="ti ti-plus"></i>Add Task</button>`;
     }
     else if(v==='calendar') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Calendar</div>`;
@@ -987,7 +989,7 @@ const App={
       slider.style.width=activeRect.width+'px';
     });
   },
-  toggleDark(){S.darkMode=!S.darkMode;document.body.classList.toggle('light',!S.darkMode);this.renderTopbar()},
+  toggleDark(){S.darkMode=!S.darkMode;document.body.classList.toggle('light',!S.darkMode);save();this.renderTopbar();if(S.view==='kanban')this._posSlider();},
 
   /* ─── DASHBOARD ─── */
   renderDash(el){
