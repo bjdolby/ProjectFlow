@@ -506,6 +506,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--fon
 .cmd-kbd{font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 5px;font-family:monospace;flex-shrink:0}
 #cmd-footer{padding:8px 16px;border-top:1px solid var(--border);display:flex;gap:14px;font-size:11px;color:var(--text3)}
 #cmd-footer span{display:flex;align-items:center;gap:4px}
+
+.k-col.col-dragging{opacity:0.4;transform:scale(0.97)}
+.k-col.col-drop-left{box-shadow:-3px 0 0 2px var(--accent)}
+.k-col.col-drop-right{box-shadow:3px 0 0 2px var(--accent)}
 </style>
 </head>
 <body>
@@ -626,7 +630,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--fon
    DATA HELPERS
 ═══════════════════════════════════════════════ */
 // USERS now lives in S.users -- see state init above
-const COL_COLORS=['#7c6fff','#34d399','#f472b6','#fbbf24','#60a5fa','#f87171','#2dd4bf','#fb923c'];
+const COL_COLORS=[
+  // Purples & blues
+  '#7c6fff','#6366f1','#8b5cf6','#a78bfa','#60a5fa','#3b82f6','#0ea5e9','#06b6d4',
+  // Greens & teals
+  '#34d399','#10b981','#059669','#2dd4bf','#14b8a6','#84cc16','#22c55e','#4ade80',
+  // Reds, pinks & oranges
+  '#f87171','#ef4444','#f472b6','#ec4899','#fb923c','#f97316','#fbbf24','#f59e0b',
+  // Neutrals & others
+  '#94a3b8','#64748b','#a8a29e','#78716c','#d946ef','#e879f9','#c084fc','#e11d48',
+];
 const uid=()=>Math.random().toString(36).slice(2,9);
 const dnow=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
 const timeAgo=(ts)=>{const s=Math.floor((Date.now()-ts)/1000);if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'};
@@ -812,7 +825,7 @@ let S;
   USERS=S.users;
 })();
 
-let dragTaskId=null,searchQ='',filterPrio='',filterLabel='',filterTag='',ganttFilter='';
+let dragTaskId=null,dragColId=null,searchQ='',filterPrio='',filterLabel='',filterTag='',ganttFilter='',ganttPersonFilter='';
 let calMonth=new Date().getMonth(),calYear=new Date().getFullYear(),calPersonFilter='';
 let timerInt=null,openTaskId=null;
 
@@ -968,7 +981,7 @@ const App={
     else if(v==='calendar') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Calendar</div>`;
     else if(v==='gantt'){
       left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Timeline</div>`;
-      actions=`<select onchange="App.setGanttFilter(this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All Projects</option>${S.projects.map(p=>`<option value="${p.id}"${ganttFilter===p.id?' selected':''}>${p.emoji} ${p.name}</option>`).join('')}</select>`;
+      actions=`<select onchange="App.setGanttFilter(this.value)" style="background:var(--bg3);border:1px solid ${ganttFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All Projects</option>${S.projects.map(p=>`<option value="${p.id}"${ganttFilter===p.id?' selected':''}>${p.emoji} ${p.name}</option>`).join('')}</select><select onchange="App.setGanttPerson(this.value)" style="background:var(--bg3);border:1px solid ${ganttPersonFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttPersonFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All People</option>${S.users.map(u=>`<option value="${u.id}"${ganttPersonFilter===u.id?' selected':''}>${u.name}</option>`).join('')}</select>`;
     }
     else if(v==='settings') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Settings</div>`;
     else if(v==='notes'){left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Notes</div>`;actions=`<button class="btn btn-primary" onclick="App.addNote()"><i class="ti ti-plus"></i>New Note</button>`;}
@@ -1301,8 +1314,8 @@ const App={
 
   buildCol(col,tasks,p){
     if(col.collapsed) return`<div class="k-col collapsed" data-col="${col.id}" style="cursor:pointer" onclick="App.toggleCol('${col.id}')"><div style="display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:10px;height:100%"><div class="col-dot" style="background:${col.color}"></div><div style="writing-mode:vertical-lr;font-size:12px;font-weight:600;color:var(--text2)">${col.title}</div><div class="col-count">${tasks.length}</div></div></div>`;
-    return`<div class="k-col" data-col="${col.id}" ondragover="App.onColOver(event,'${col.id}')" ondrop="App.onColDrop(event,'${col.id}')">
-      <div class="k-col-header">
+    return`<div class="k-col" data-col="${col.id}" ondragover="App.onColOver(event,'${col.id}')" ondrop="App.onColDrop(event,'${col.id}')" ondragleave="App.onColLeave(event)">
+      <div class="k-col-header" draggable="true" ondragstart="App.onColDragStart(event,'${col.id}')" ondragend="App.onColDragEnd(event)" title="Drag to reorder">
         <div class="col-dot" style="background:${col.color}"></div>
         <div class="col-title" ondblclick="App.renameCol('${col.id}')">${col.title}</div>
         <div class="col-count">${tasks.length}</div>
@@ -1363,7 +1376,28 @@ const App={
 
   /* ─── DRAG & DROP ─── */
   bindDD(){},
-  onDragStart(e,id){dragTaskId=id;e.target.classList.add('dragging');e.dataTransfer.effectAllowed='move'},
+  onColDragStart(e,colId){
+    // Don't start col drag if it's a task card drag starting
+    if(dragTaskId)return;
+    dragColId=colId;
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/col',colId);
+    // Slight delay so the dragging style applies after drag image is captured
+    setTimeout(()=>{const el=document.querySelector(`.k-col[data-col="${colId}"]`);if(el)el.classList.add('col-dragging');},0);
+    e.stopPropagation();
+  },
+  onColDragEnd(e){
+    dragColId=null;
+    document.querySelectorAll('.k-col').forEach(c=>{
+      c.classList.remove('col-dragging','col-drop-left','col-drop-right');
+    });
+  },
+  onColLeave(e){
+    // Remove drop indicator when leaving a column
+    const col=e.currentTarget;
+    if(col)col.classList.remove('col-drop-left','col-drop-right');
+  },
+  onDragStart(e,id){dragColId=null;dragTaskId=id;e.target.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.stopPropagation();},
   onDragEnd(e){e.target.classList.remove('dragging');document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('drag-target'));dragTaskId=null},
   onCardOver(e){e.preventDefault();e.stopPropagation()},
   onCardDrop(e,targetId){
@@ -1376,9 +1410,41 @@ const App={
     p.tasks.splice(si,1);p.tasks.splice(ti,0,src);
     dragTaskId=null;this.renderKanban(document.getElementById('content'));this.toast('Task moved','ok');
   },
-  onColOver(e,colId){e.preventDefault();document.querySelectorAll('.k-col').forEach(c=>c.classList.toggle('drag-target',c.dataset.col===colId))},
+  onColOver(e,colId){
+    e.preventDefault();
+    if(dragColId&&dragColId!==colId){
+      // Column reorder mode — show left/right drop indicator
+      e.dataTransfer.dropEffect='move';
+      const targetEl=document.querySelector(`.k-col[data-col="${colId}"]`);
+      if(targetEl){
+        const rect=targetEl.getBoundingClientRect();
+        const isLeft=e.clientX<rect.left+rect.width/2;
+        document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('col-drop-left','col-drop-right'));
+        targetEl.classList.add(isLeft?'col-drop-left':'col-drop-right');
+      }
+    } else if(!dragColId){
+      // Task drag mode — highlight column as drop target
+      document.querySelectorAll('.k-col').forEach(c=>c.classList.toggle('drag-target',c.dataset.col===colId));
+    }
+  },
   onColDrop(e,colId){
-    e.preventDefault();document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('drag-target'));
+    e.preventDefault();
+    document.querySelectorAll('.k-col').forEach(c=>c.classList.remove('drag-target','col-drop-left','col-drop-right'));
+    // Column reorder mode
+    if(dragColId&&dragColId!==colId){
+      const p=proj();if(!p)return;
+      const fromIdx=p.columns.findIndex(c=>c.id===dragColId);
+      const toIdx=p.columns.findIndex(c=>c.id===colId);
+      if(fromIdx<0||toIdx<0){dragColId=null;return;}
+      const targetEl=document.querySelector(`.k-col[data-col="${colId}"]`);
+      const rect=targetEl?targetEl.getBoundingClientRect():null;
+      const insertAfter=rect?e.clientX>rect.left+rect.width/2:fromIdx<toIdx;
+      const col=p.columns.splice(fromIdx,1)[0];
+      const newTo=p.columns.findIndex(c=>c.id===colId);
+      p.columns.splice(insertAfter?newTo+1:newTo,0,col);
+      dragColId=null;save();this.renderKanban(document.getElementById('content'));return;
+    }
+    // Task drop mode
     if(!dragTaskId)return;
     const p=proj(),t=p.tasks.find(x=>x.id===dragTaskId);
     if(!t||t.colId===colId)return;
@@ -1389,11 +1455,11 @@ const App={
   /* ─── COLUMN OPS ─── */
   addColumn(){
     const p=proj();if(!p)return;
-    const sw=COL_COLORS.map(c=>`<div onclick="this.parentNode.querySelectorAll('div[data-swatch]').forEach(x=>x.style.outline='none');this.style.outline='3px solid white';document.getElementById('nc-col').value='${c}'" data-swatch="1" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;margin:2px;outline:none"></div>`).join('');
+    const sw=COL_COLORS.map(c=>`<div onclick="this.parentNode.querySelectorAll('div[data-swatch]').forEach(x=>x.style.outline='none');this.style.outline='3px solid white';document.getElementById('nc-col').value='${c}'" data-swatch="1" style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;margin:2px;outline:none;flex-shrink:0"></div>`).join('');
     const posOpts=['<option value="end">At the end</option>','<option value="start">At the beginning</option>',...p.columns.map((c,i)=>`<option value="${i}">After "${c.title}"</option>`)].join('');
     this.confirm('Add Column',
       `<div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Column Name</label><input id="nc-name" class="inline-input" style="margin-top:5px" placeholder="e.g. Review"/></div>
-      <div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Colour</label><input type="hidden" id="nc-col" value="${COL_COLORS[p.columns.length%COL_COLORS.length]}"/><div style="margin-top:6px">${sw}</div></div>
+      <div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Colour</label><input type="hidden" id="nc-col" value="${COL_COLORS[p.columns.length%COL_COLORS.length]}"/><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:1px">${sw}</div></div>
       <div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Position</label><select id="nc-pos" class="inline-input" style="margin-top:5px">${posOpts}</select></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px"><input type="checkbox" id="nc-dash" style="width:15px;height:15px;cursor:pointer"/><label for="nc-dash" style="font-size:12px;color:var(--text2);cursor:pointer">Show as KPI card on Dashboard</label></div>`,
       ()=>{
@@ -1416,9 +1482,9 @@ const App={
   renameCol(id){const p=proj(),c=p.columns.find(x=>x.id===id);if(!c)return;const n=prompt('Rename column:',c.title);if(n&&n.trim())c.title=n.trim();this.renderKanban(document.getElementById('content'))},
   editCol(id){
     const p=proj(),col=p.columns.find(c=>c.id===id);if(!col)return;
-    const swatches=COL_COLORS.map(c=>`<div onclick="this.parentNode.querySelectorAll('div').forEach(x=>x.style.outline='none');this.style.outline='3px solid white';document.getElementById('ec-col').value='${c}'" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;margin:2px;outline:${col.color===c?'3px solid white':'none'}"></div>`).join('');
+    const swatches=COL_COLORS.map(c=>`<div onclick="this.parentNode.querySelectorAll('div').forEach(x=>x.style.outline='none');this.style.outline='3px solid white';document.getElementById('ec-col').value='${c}'" style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;margin:2px;outline:${col.color===c?'3px solid white':'none'};flex-shrink:0"></div>`).join('');
     this.confirm(`Edit Column: ${col.title}`,
-      `<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text2)">Name</label><input id="ec-name" class="inline-input" style="margin-top:5px" value="${col.title}"/></div><div><label style="font-size:12px;color:var(--text2)">Color</label><input type="hidden" id="ec-col" value="${col.color}"/><div style="margin-top:6px">${swatches}</div></div>`,
+      `<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text2)">Name</label><input id="ec-name" class="inline-input" style="margin-top:5px" value="${col.title}"/></div><div><label style="font-size:12px;color:var(--text2)">Color</label><input type="hidden" id="ec-col" value="${col.color}"/><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:1px">${swatches}</div></div>`,
       ()=>{const n=document.getElementById('ec-name').value.trim(),c2=document.getElementById('ec-col').value;if(n)col.title=n;if(c2)col.color=c2;this.renderKanban(document.getElementById('content'));this.toast('Column updated','ok')},'Save');
   },
   delCol(id){
@@ -1509,6 +1575,13 @@ const App={
         </div>
 
         <div class="m-section"><div class="m-label">Description</div><textarea class="m-textarea" placeholder="Add a description..." oninput="App.upd('${t.id}','desc',this.value)">${t.desc||''}</textarea></div>
+
+        <div class="m-section"><div class="m-label">Labels</div>
+          <div class="tag-wrap" id="labels-${t.id}">
+            ${(t.labels||[]).map((l,i)=>`<span class="label ${labelCls(l)}" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:3px 8px">${l}<i class="ti ti-x" style="font-size:10px;opacity:0.7" onclick="App.rmLabel('${t.id}',${i})"></i></span>`).join('')}
+            <span class="tag tag-add" onclick="App.addLabel('${t.id}')"><i class="ti ti-plus"></i>Label</span>
+          </div>
+        </div>
 
         <div class="m-section"><div class="m-label">Tags</div>
           <div class="tag-wrap" id="tags-${t.id}">
@@ -1667,6 +1740,9 @@ const App={
   },
   updSub(id,i,v){const f=findTask(id);if(!f)return;f.t.subtasks[i].text=v;save()},
   delSub(id,i){const f=findTask(id);if(!f)return;f.t.subtasks.splice(i,1);this.showModal(f.t,f.p)},
+  addLabel(id){const lbl=prompt('Add label:');if(!lbl)return;const f=findTask(id);if(!f)return;if(!f.t.labels)f.t.labels=[];f.t.labels.push(lbl.trim());f.t.updated=Date.now();save();
+    const wrap=document.getElementById('labels-'+id);if(wrap){const idx=f.t.labels.length-1;const span=document.createElement('span');span.className='label '+labelCls(lbl);span.style.cssText='cursor:pointer;display:inline-flex;align-items:center;gap:3px;padding:3px 8px';span.innerHTML=lbl+'<i class="ti ti-x" style="font-size:10px;opacity:0.7" onclick="App.rmLabel(\''+id+'\','+idx+')"></i>';wrap.insertBefore(span,wrap.lastElementChild);}},
+  rmLabel(id,i){const f=findTask(id);if(!f)return;f.t.labels.splice(i,1);f.t.updated=Date.now();save();this.showModal(f.t,f.p)},
   addTag(id){const tag=prompt('Add tag:');if(!tag)return;const f=findTask(id);if(!f)return;if(!f.t.tags)f.t.tags=[];f.t.tags.push(tag.toLowerCase().replace(/\s+/g,'-'));f.t.updated=Date.now();save();
     const wrap=document.getElementById('tags-'+id);if(wrap){const span=document.createElement('span');span.className='tag';span.innerHTML=`${f.t.tags.at(-1)}<i class="ti ti-x" onclick="App.rmTag('${id}',${f.t.tags.length-1})"></i>`;wrap.insertBefore(span,wrap.lastElementChild)}},
   rmTag(id,i){const f=findTask(id);if(!f)return;f.t.tags.splice(i,1);f.t.updated=Date.now();save();this.showModal(f.t,f.p)},
@@ -1781,10 +1857,13 @@ const App={
 
   /* ─── GANTT ─── */
   setGanttFilter(val){ganttFilter=val;this.renderGantt(document.getElementById('content'))},
+  setGanttPerson(val){ganttPersonFilter=val;this.renderGantt(document.getElementById('content'))},
   renderGantt(el){
     // Build task list -- apply project filter
     const sources=ganttFilter?S.projects.filter(p=>p.id===ganttFilter):S.projects;
-    const all=sources.flatMap(p=>p.tasks.map(t=>({...t,proj:p}))).filter(t=>t.due).sort((a,b)=>a.due.localeCompare(b.due));
+    let all=sources.flatMap(p=>p.tasks.map(t=>({...t,proj:p}))).filter(t=>t.due);
+    if(ganttPersonFilter)all=all.filter(t=>(t.assignees||[]).includes(ganttPersonFilter));
+    all.sort((a,b)=>a.due.localeCompare(b.due));
 
     const now=new Date(),startD=new Date(now);startD.setDate(startD.getDate()-7);
     const endD=new Date(now);endD.setDate(endD.getDate()+70);
@@ -1792,17 +1871,23 @@ const App={
     const getX=ds=>{const diff=Math.round((new Date(ds)-startD)/864e5);return Math.max(0,Math.min(100,diff/total*100))};
     const todayX=getX(today());
 
-    let weekMarks='';
+    const GANTT_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let weekMarks='',gridLines='';
     for(let i=0;i<total;i+=7){
       const d=new Date(startD);d.setDate(d.getDate()+i);
       const x=getX(d.toISOString().slice(0,10));
-      weekMarks+=`<div style="position:absolute;left:${x}%;font-size:10px;color:var(--text3);transform:translateX(-50%);white-space:nowrap">${d.getDate()}/${d.getMonth()+1}</div>`;
+      const isMonthStart=d.getDate()<=7;
+      weekMarks+=`<div style="position:absolute;left:${x}%;transform:translateX(-50%);text-align:center;white-space:nowrap">
+        <div style="font-size:9px;font-weight:700;color:${isMonthStart?'var(--accent2)':'var(--text3)'};text-transform:uppercase;line-height:1.2">${GANTT_MONTHS[d.getMonth()]}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text2);line-height:1.2">${d.getDate()}</div>
+      </div>`;
+      gridLines+=`<div style="position:absolute;left:${x}%;top:0;width:1px;height:100%;background:var(--border);opacity:0.5;pointer-events:none"></div>`;
     }
 
     el.style.display='flex';el.style.flexDirection='column';el.style.overflow='hidden';
     el.innerHTML=`<div class="gantt-wrap"><div style="min-width:800px">
-      <div class="gantt-head"><div class="g-name-col">Task</div><div class="g-timeline" style="position:relative;height:22px">${weekMarks}</div></div>
-      ${!all.length?`<div style="padding:40px;text-align:center;color:var(--text3);font-size:13px">No tasks with due dates${ganttFilter?' in this project':''}</div>`:''}
+      <div class="gantt-head"><div class="g-name-col">Task</div><div class="g-timeline" style="position:relative;height:30px">${weekMarks}</div></div>
+      ${!all.length?`<div style="padding:40px;text-align:center;color:var(--text3);font-size:13px">No tasks with due dates${ganttFilter?' in this project':''}${ganttPersonFilter?' for this person':''}</div>`:''}
       ${all.map(t=>{
         const po=priObj(t.priority);
         const endX=getX(t.due);
@@ -1813,10 +1898,12 @@ const App={
           <div class="g-task-name" onclick="App.openTask('${t.id}')" title="Open task" style="cursor:pointer">
             <span style="font-size:14px;flex-shrink:0">${t.proj.emoji}</span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${t.title}</span>
+            ${(t.assignees||[]).slice(0,2).map(aid=>{const u=S.users.find(x=>x.id===aid);return u?`<div class="avatar av-sm" style="background:${u.color}22;color:${u.color};flex-shrink:0;width:18px;height:18px;font-size:9px">${u.initials}</div>`:''}).join('')}
             <i class="ti ti-arrow-right" style="font-size:11px;opacity:0;flex-shrink:0;transition:opacity 0.15s" class="g-open-icon"></i>
           </div>
           <div class="g-bars">
-            <div style="position:absolute;left:${todayX}%;top:0;width:2px;height:100%;background:var(--red);opacity:0.4;pointer-events:none"></div>
+            ${gridLines}
+            <div style="position:absolute;left:${todayX}%;top:0;width:2px;height:100%;background:var(--red);opacity:0.5;pointer-events:none"></div>
             <div class="g-bar" style="left:${startX}%;width:${w}%;background:${ov?'var(--red)':po.col};cursor:pointer"
               onclick="App.openTask('${t.id}')"
               title="Click to open: ${t.title}">${w>8?t.title.slice(0,20):''}</div>
@@ -1911,12 +1998,26 @@ const App={
 
   /* ─── PROJECT OPS ─── */
   newProject(){
-    const name=prompt('Project name:');if(!name)return;
-    const emojis=['🚀','⚡','🎯','🔥','💎','🌟','📊','🎪'];
-    const p={id:'p'+uid(),name,emoji:emojis[Math.floor(Math.random()*emojis.length)],color:COL_COLORS[S.projects.length%COL_COLORS.length],desc:'New project',projectNotes:'',deadline:dnow(90),members:['u1'],created:Date.now(),
-      columns:[{id:'c'+uid(),title:'To Do',color:'#6b7280'},{id:'c'+uid(),title:'In Progress',color:'#60a5fa'},{id:'c'+uid(),title:'On Hold',color:'#fbbf24'},{id:'c'+uid(),title:'Complete',color:'#34d399'}],
-      automations:{0:'To Do',1:'In Progress',76:'On Hold',100:'Complete'},tasks:[]};
-    S.projects.push(p);S.activeProjectId=p.id;this.nav('kanban',p.id);this.toast('Project created!','ok');
+    const emojis=['🚀','⚡','🎯','🔥','💎','🌟','📊','🎪','🏆','🔑','📋','💡','🎯','🛠','📈','🗂'];
+    const defaultEmoji=emojis[S.projects.length%emojis.length];
+    const defaultColor=COL_COLORS[S.projects.length%COL_COLORS.length];
+    const sw=COL_COLORS.map(c=>`<div onclick="this.parentNode.querySelectorAll('div[data-sw]').forEach(x=>x.style.outline='none');this.style.outline='3px solid white';document.getElementById('np-col').value='${c}'" data-sw="1" style="width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;margin:2px;outline:${c===defaultColor?'3px solid white':'none'};flex-shrink:0"></div>`).join('');
+    this.confirm('New Project',
+      `<div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Project Name</label><input id="np-name" class="inline-input" style="margin-top:5px" placeholder="e.g. Finance Q3" autofocus/></div>
+      <div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Description</label><input id="np-desc" class="inline-input" style="margin-top:5px" placeholder="What is this project about?"/></div>
+      <div style="margin-bottom:10px"><label style="font-size:12px;color:var(--text2)">Deadline</label><input id="np-dl" type="date" class="inline-input" style="margin-top:5px" value="${dnow(90)}"/></div>
+      <div><label style="font-size:12px;color:var(--text2)">Colour</label><input type="hidden" id="np-col" value="${defaultColor}"/><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:1px">${sw}</div></div>`,
+      ()=>{
+        const name=document.getElementById('np-name').value.trim();if(!name)return;
+        const desc=document.getElementById('np-desc').value.trim()||'New project';
+        const dl=document.getElementById('np-dl').value||dnow(90);
+        const color=document.getElementById('np-col').value||defaultColor;
+        const emoji=emojis[Math.floor(Math.random()*emojis.length)];
+        const p={id:'p'+uid(),name,emoji,color,desc,projectNotes:'',deadline:dl,members:['u1'],created:Date.now(),
+          columns:[{id:'c'+uid(),title:'To Do',color:'#6b7280'},{id:'c'+uid(),title:'In Progress',color:'#60a5fa'},{id:'c'+uid(),title:'On Hold',color:'#fbbf24'},{id:'c'+uid(),title:'Complete',color:'#34d399'}],
+          automations:{0:'To Do',1:'In Progress',76:'On Hold',100:'Complete'},tasks:[]};
+        S.projects.push(p);S.activeProjectId=p.id;save();this.nav('kanban',p.id);this.toast('Project created!','ok');
+      },'Create Project');
   },
 
   /* ─── QUICK ADD ─── */
