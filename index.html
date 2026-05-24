@@ -825,7 +825,7 @@ let S;
   USERS=S.users;
 })();
 
-let dragTaskId=null,dragColId=null,searchQ='',filterPrio='',filterLabel='',filterTag='',ganttFilter='',ganttPersonFilter='';
+let dragTaskId=null,dragColId=null,searchQ='',filterPrio='',filterLabel='',filterTag='',ganttFilter='',ganttPersonFilter='',ganttProgressFilter='';
 let calMonth=new Date().getMonth(),calYear=new Date().getFullYear(),calPersonFilter='';
 let timerInt=null,openTaskId=null;
 
@@ -981,7 +981,7 @@ const App={
     else if(v==='calendar') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Calendar</div>`;
     else if(v==='gantt'){
       left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Timeline</div>`;
-      actions=`<select onchange="App.setGanttFilter(this.value)" style="background:var(--bg3);border:1px solid ${ganttFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All Projects</option>${S.projects.map(p=>`<option value="${p.id}"${ganttFilter===p.id?' selected':''}>${p.emoji} ${p.name}</option>`).join('')}</select><select onchange="App.setGanttPerson(this.value)" style="background:var(--bg3);border:1px solid ${ganttPersonFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttPersonFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All People</option>${S.users.map(u=>`<option value="${u.id}"${ganttPersonFilter===u.id?' selected':''}>${u.name}</option>`).join('')}</select>`;
+      actions=`<select onchange="App.setGanttFilter(this.value)" style="background:var(--bg3);border:1px solid ${ganttFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All Projects</option>${S.projects.map(p=>`<option value="${p.id}"${ganttFilter===p.id?' selected':''}>${p.emoji} ${p.name}</option>`).join('')}</select><select onchange="App.setGanttPerson(this.value)" style="background:var(--bg3);border:1px solid ${ganttPersonFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttPersonFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All People</option>${S.users.map(u=>`<option value="${u.id}"${ganttPersonFilter===u.id?' selected':''}>${u.name}</option>`).join('')}</select><select onchange="App.setGanttProgress(this.value)" style="background:var(--bg3);border:1px solid ${ganttProgressFilter?'var(--accent)':'var(--border2)'};border-radius:9px;color:${ganttProgressFilter?'var(--accent)':'var(--text)'};font-family:var(--font);font-size:13px;padding:5px 10px;outline:none;cursor:pointer"><option value="">All Progress</option><option value="notstarted"${ganttProgressFilter==='notstarted'?' selected':''}>Not Started</option><option value="inprog"${ganttProgressFilter==='inprog'?' selected':''}>In Progress</option><option value="onhold"${ganttProgressFilter==='onhold'?' selected':''}>On Hold</option><option value="done"${ganttProgressFilter==='done'?' selected':''}>Completed</option><option value="overdue"${ganttProgressFilter==='overdue'?' selected':''}>Overdue</option></select>`;
     }
     else if(v==='settings') left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Settings</div>`;
     else if(v==='notes'){left=`<div style="font-family:var(--font-display);font-weight:700;font-size:17px">Notes</div>`;actions=`<button class="btn btn-primary" onclick="App.addNote()"><i class="ti ti-plus"></i>New Note</button>`;}
@@ -1525,8 +1525,8 @@ const App={
     overlay.innerHTML=`<div id="task-modal">
       <div class="modal-header">
         <div class="modal-title-wrap">
-          <textarea class="modal-title-input" rows="2" id="mt-title" oninput="App.upd('${t.id}','title',this.value)">${t.title}</textarea>
-          <div class="modal-subtitle">${p.emoji} ${p.name} . Created ${new Date(t.created).toLocaleDateString('en-GB')}</div>
+          <textarea class="modal-title-input" rows="2" id="mt-title" oninput="App.upd('${t.id}','title',this.value)" onfocus="if(this.value==='New Task'){this.select()}">${t.title}</textarea>
+          <div class="modal-subtitle">${p.emoji} ${p.name}</div>
         </div>
         <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
           <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="App.closeModal()"><i class="ti ti-check"></i>Save & Close</button>
@@ -1858,15 +1858,29 @@ const App={
   /* ─── GANTT ─── */
   setGanttFilter(val){ganttFilter=val;this.renderGantt(document.getElementById('content'))},
   setGanttPerson(val){ganttPersonFilter=val;this.renderGantt(document.getElementById('content'))},
+  setGanttProgress(val){ganttProgressFilter=val;this.renderGantt(document.getElementById('content'))},
   renderGantt(el){
     // Build task list -- apply project filter
     const sources=ganttFilter?S.projects.filter(p=>p.id===ganttFilter):S.projects;
     let all=sources.flatMap(p=>p.tasks.map(t=>({...t,proj:p}))).filter(t=>t.due);
     if(ganttPersonFilter)all=all.filter(t=>(t.assignees||[]).includes(ganttPersonFilter));
+    if(ganttProgressFilter){
+      const td=today();
+      if(ganttProgressFilter==='notstarted')all=all.filter(t=>t.progress===0);
+      else if(ganttProgressFilter==='inprog')all=all.filter(t=>t.progress>0&&t.progress<100);
+      else if(ganttProgressFilter==='onhold')all=all.filter(t=>{const p2=S.projects.find(pp=>pp.tasks.some(x=>x.id===t.id));const col=p2?.columns.find(c=>c.id===t.colId);return col&&col.title.toLowerCase().includes('hold');});
+      else if(ganttProgressFilter==='done')all=all.filter(t=>t.progress===100);
+      else if(ganttProgressFilter==='overdue')all=all.filter(t=>t.due<td&&t.progress<100);
+    }
     all.sort((a,b)=>a.due.localeCompare(b.due));
 
-    const now=new Date(),startD=new Date(now);startD.setDate(startD.getDate()-7);
-    const endD=new Date(now);endD.setDate(endD.getDate()+70);
+    // Extend range to cover all task dates + padding
+    const now=new Date();
+    const allDates=all.map(t=>new Date(t.due)).filter(d=>!isNaN(d));
+    const minDate=allDates.length?new Date(Math.min(...allDates,now)):new Date(now);
+    const maxDate=allDates.length?new Date(Math.max(...allDates,now)):new Date(now);
+    const startD=new Date(minDate);startD.setDate(startD.getDate()-14);
+    const endD=new Date(maxDate);endD.setDate(endD.getDate()+21);
     const total=Math.round((endD-startD)/864e5);
     const getX=ds=>{const diff=Math.round((new Date(ds)-startD)/864e5);return Math.max(0,Math.min(100,diff/total*100))};
     const todayX=getX(today());
